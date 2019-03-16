@@ -1,4 +1,4 @@
-module Seek
+module SeekRfi
 
 import Statistics
 

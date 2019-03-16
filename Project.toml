@@ -1,5 +1,5 @@
 authors = ["Gu Junhua <jhgu@nao.cas.cn>"]
-name = "Seek"
+name = "SeekRfi"
 uuid = "efd4b400-47b3-11e9-1486-9f7c8b35bb6a"
 version = "0.1.0"
 
