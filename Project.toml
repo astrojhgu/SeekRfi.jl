@@ -1,0 +1,8 @@
+authors = ["Gu Junhua <jhgu@nao.cas.cn>"]
+name = "Seek"
+uuid = "efd4b400-47b3-11e9-1486-9f7c8b35bb6a"
+version = "0.1.0"
+
+[deps]
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+
