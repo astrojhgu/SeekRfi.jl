@@ -3,7 +3,16 @@ module SeekRfi
 import Statistics
 import Images
 
-function gaussian_filter(V, mask; M=40, N=20, sigma_m=0.5, sigma_n=0.5)
+import FITSIO
+
+function write_fits(T::DataType, v, name::String)
+    f=FITSIO.FITS(name, "w")
+    write(f, convert(Array{T},transpose(v)))
+    close(f)
+end
+
+
+function gaussian_filter(V, mask; M=40, N=20, sigma_m=7.5, sigma_n=15)
     wd(n,m;sigma_n, sigma_m)=exp.(-n.^2/(2*sigma_n^2).-m.^2/(2*sigma_m^2))
 
     Vp=zeros(eltype(V), size(V,1)+N, size(V,2)+M)
@@ -14,8 +23,9 @@ function gaussian_filter(V, mask; M=40, N=20, sigma_m=0.5, sigma_n=0.5)
     
     Vh=zeros(eltype(V), size(V,1)+N, size(V,2)+M)
     Vh2=zeros(eltype(V), size(V,1)+N, size(V,2)+M)
-    n=collect(-N÷2+1:N÷2)
-    m=collect(-M÷2+1:M÷2)
+    n=collect(-N÷2:N÷2)
+    m=collect(-M÷2:M÷2)
+    #println(size(n))
 
     kernel_0=wd(n, 0, sigma_n=sigma_n, sigma_m=sigma_m)
     kernel_1=wd(0, m, sigma_n=sigma_n, sigma_m=sigma_m)
@@ -36,11 +46,11 @@ function _gaussian_filter(Vp, vs0, vs1, Wfp, mask, Vh, Vh2, kernel_0, kernel_1, 
             if mask[i-n2, j-m2]
                 Vh[i,j]=zero(eltype(Vh))
             else
-                val=sum(Wfp[i-n2+1:i+n2, j].*Vp[i-n2+1:i+n2, j].*kernel_0)
+                val=sum(Wfp[i-n2:i+n2, j].*Vp[i-n2:i+n2, j].*kernel_0)
                 #print(sum(Vp[i-n2+1:i+n2, j])," ")
                 
-                Vh[i,j]=val/sum(Wfp[i-n2+1:i+n2, j].*kernel_0)
-                print(Vh[i,j]," ")
+                Vh[i,j]=val/sum(Wfp[i-n2:i+n2, j].*kernel_0)
+                #print(Vh[i,j]," ")
             end
         end
     end
@@ -49,8 +59,8 @@ function _gaussian_filter(Vp, vs0, vs1, Wfp, mask, Vh, Vh2, kernel_0, kernel_1, 
             if mask[i2-n2, j2-m2]
                 Vh2[i2,j2]=zero(eltype(Vh))
             else
-                val=sum(Wfp[i2, j2-m2+1:j2+m2].*Vh[i2, j2-m2+1:j2+m2].*kernel_1)
-                Vh2[i2,j2]=val/sum(Wfp[i2, j2-m2+1:j2+m2].*kernel_1)
+                val=sum(Wfp[i2, j2-m2:j2+m2].*Vh[i2, j2-m2:j2+m2].*kernel_1)
+                Vh2[i2,j2]=val/sum(Wfp[i2, j2-m2:j2+m2].*kernel_1)
             end
         end
     end
@@ -63,7 +73,7 @@ function create_masked_array(a::Array{T}, m)::Array{Union{Missing, T}} where {T}
     b
 end
 
-function strip_mask(a::Array{Union{Missing, T}}; default=zero(T))::Tuple{Array{T}, Array{Bool}} where {T}
+function strip_mask(a::Array{Union{Missing, T}}; default=zero(T))::Tuple{Array{T}, BitArray} where {T}
     m=ismissing.(a)
     a[m].=default
     (convert(Array{T}, a), m)
@@ -73,47 +83,51 @@ function normalize(a, mask)
     ma=create_masked_array(a, mask)
     med=[Statistics.median(skipmissing(r)) for r in eachrow(ma)]
     c=abs.(hcat((c-med for c in eachcol(ma))...))
+    c=convert(Array{Union{Missing, eltype(a)}}, c)
+    #println(typeof(c))
     c,_=strip_mask(c)
     c[mask]=a[mask]
     c
 end
 
-function binary_mask_dilation(mask::Array{Bool, 2}, ss1::Int, ss2::Int)::Array{Bool, 2}
+function binary_mask_dilation(mask, ss1::Int, ss2::Int)::BitArray{2}
     #d=Images.dilate(mask)-mask
-    pt=trues(ss1, ss2)
+    pt=ones(ss1, ss2)
     #(mask+Images.imfilter(d,Images.centered(pt))).>0
-    Images.imfilter(mask, Images.centered(pt))
+    result=Images.imfilter(mask, Images.centered(pt)).>0
+    result=Images.imfilter(result, Images.centered(pt)).>0
 end
 
-function _sumthreshold(data, mask::Array{Bool,2}, i, chi, ds0, ds1)::Array{Bool, 2}
+function _sumthreshold(data, mask::BitArray{2}, i::Integer, chi)::BitArray{2}
     tmp_mask=copy(mask)
+    ds0, ds1=size(data)
     T=eltype(data)
-    for x in 1:ds0
-        sum=zero(T)
-        cnt=0
-
-        for ii in 1:i
-            if  ! mask[x, ii]
-                sum+=data[x,ii]
-                cnt+=1
+    for x in 0:ds0-1
+        sum = zero(T)
+        cnt = 0
+        
+        for ii in 0:i-1
+            if mask[x+1, ii+1] != true
+                sum += data[x+1, ii+1]
+                cnt += 1
             end
         end
-
-        for y in i+1:ds1
-            if sum > chi*cnt
-                for ii2 in 1:i
-                    tmp_mask[x, y-ii2]=true
+        
+        for y in i:ds1-1
+            if sum > chi * cnt
+                for ii2 in 0:i-1
+                    tmp_mask[x+1, y-ii2] = true
                 end
             end
-
-            if ! mask[x,y]
-                sum+=data[x,y]
-                cnt+=1
+                    
+            if mask[x+1, y+1] != true
+                sum += data[x+1, y+1]
+                cnt += 1
             end
-
-            if ! mask[x, y-i]
-                sum -= data[x, y-i]
-                cnt-=1
+            
+            if mask[x+1, y-i+1] != true
+                sum -= data[x+1, y-i+1]
+                cnt -= 1
             end
         end
     end
@@ -127,20 +141,31 @@ function _run_sumthreshold(data, init_mask, eta, M, chi_i)
     st_mask=copy(init_mask)
 
     for (m, chi) in zip(M, chi_i)
+        #println("m= ",m)
         chi = chi/eta
         if m==1
             st_mask = st_mask .| (res .>= chi)
+            #write_fits(Int, st_mask, "mask_0.fits")
+            #exit()
         else
-            st_mask = _sumthreshold(res, st_mask, m, chi, size(res,1), size(res,2))
-            st_mask = _sumthreshold(convert(Array, transpose(res)), convert(Array, transpose(st_mask)), 
-            chi, size(res, 2), size(res, 1))
+            #println(size(res))
+            #println(size(st_mask))
+            st_mask = _sumthreshold(res, st_mask, m, chi)
+            st_mask = convert(BitArray, 
+            transpose(_sumthreshold(convert(Array, transpose(res)), convert(BitArray, transpose(st_mask)), m, 
+            chi))
+            )
+            write_fits(Int, st_mask, "mask_"*string(m)*".fits")
         end
     end
+    write_fits(Int, st_mask, "final_"*string(eta)*".fits")
     st_mask
 end
 
-function get_rfi_mask(data; mask::Union{Missing, Array{Bool, 2}}=missing, ss1=3, ss2=7, chi_1=35000.0, eta_i=[0.5, 0.55, 0.62, 0.75, 1], 
+function get_rfi_mask(data; mask::Union{Missing, BitArray{2}}=missing, ss1=3, ss2=3, chi_1=35000.0, eta_i=[0.5, 0.55, 0.62, 0.75, 1], 
     normalize_standing_waves=true, suppress_dilation=false)
+    T=eltype(data)
+
     if ismissing(mask)
         mask=falses(size(data)...)
     end
@@ -148,20 +173,25 @@ function get_rfi_mask(data; mask::Union{Missing, Array{Bool, 2}}=missing, ss1=3,
     if normalize_standing_waves
         data=normalize(data, mask)
     end
-
-    p=convert(T, 1.5)
+    p=convert(T,1.5)
     m=1:7
-    M=convert(T, 2) .^ m
-    chi_i = chi_1 / p .^ log2.(m)
+    M=2 .^ (m .-1)
+    chi_i = chi_1 ./ p .^ log2.(m)
     st_mask=copy(mask)
-    for eta in eta_i
-        st_mask=_run_sumthreshold(data, st_mask, eta, M, chi_i)
+    for (i,eta) in enumerate(eta_i)
+        st_mask=_run_sumthreshold(data, st_mask, eta, M , chi_i)
+        #write_fits(Int, st_mask, "final_"*string(eta)*".fits")
     end
 
-    dilated_mask=st_mask
-    dilated_mask = binary_mask_dilation(st_mask .⊻ mask, ss1, ss2)
+    if suppress_dilation
+        st_mask
+    else
+        dilated_mask=st_mask
+        dilated_mask = binary_mask_dilation(dilated_mask .⊻ mask, ss1, ss2)
 
-    dilated_mask .| st_mask
+        dilated_mask .| st_mask
+    end
 end
+
 
 end # module
