@@ -90,9 +90,9 @@ function normalize(a, mask)
     c
 end
 
-function binary_mask_dilation(mask, ss1::Int, ss2::Int)::BitArray{2}
+function binary_mask_dilation(mask, kernel_m::Int, kernel_n::Int)::BitArray{2}
     #d=Images.dilate(mask)-mask
-    pt=ones(ss1, ss2)
+    pt=ones(kernel_m, kernel_n)
     #(mask+Images.imfilter(d,Images.centered(pt))).>0
     result=Images.imfilter(mask, Images.centered(pt)).>0
     result=Images.imfilter(result, Images.centered(pt)).>0
@@ -162,7 +162,7 @@ function _run_sumthreshold(data, init_mask, eta, M, chi_i)
     st_mask
 end
 
-function get_rfi_mask(data; mask::Union{Missing, BitArray{2}}=missing, ss1=3, ss2=3, chi_1=35000.0, eta_i=[0.5, 0.55, 0.62, 0.75, 1], 
+function get_rfi_mask(data; mask::Union{Missing, BitArray{2}}=missing, kernel_m=3, kernel_n=3, chi_1=35000.0, eta_i=[0.5, 0.55, 0.62, 0.75, 1], 
     normalize_standing_waves=true, suppress_dilation=false)
     T=eltype(data)
 
@@ -187,7 +187,7 @@ function get_rfi_mask(data; mask::Union{Missing, BitArray{2}}=missing, ss1=3, ss
         st_mask
     else
         dilated_mask=st_mask
-        dilated_mask = binary_mask_dilation(dilated_mask .⊻ mask, ss1, ss2)
+        dilated_mask = binary_mask_dilation(dilated_mask .⊻ mask, kernel_m, kernel_n)
 
         dilated_mask .| st_mask
     end
