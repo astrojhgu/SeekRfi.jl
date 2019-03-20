@@ -12,27 +12,27 @@ function write_fits(T::DataType, v, name::String)
 end
 
 
-function gaussian_filter(V, mask; M=40, N=20, sigma_m=7.5, sigma_n=15)
+function gaussian_filter(V, mask; kernel_m=40, kernel_n=20, sigma_m=7.5, sigma_n=15)
     wd(n,m;sigma_n, sigma_m)=exp.(-n.^2/(2*sigma_n^2).-m.^2/(2*sigma_m^2))
 
-    Vp=zeros(eltype(V), size(V,1)+N, size(V,2)+M)
-    Vp[N÷2+1:N÷2+size(V,1),M÷2+1:M÷2+size(V,2)] = V[:,:]
+    Vp=zeros(eltype(V), size(V,1)+kernel_n, size(V,2)+kernel_m)
+    Vp[kernel_n÷2+1:kernel_n÷2+size(V,1),kernel_m÷2+1:kernel_m÷2+size(V,2)] = V[:,:]
     
-    Wfp=zeros(eltype(V), size(V,1)+N, size(V,2)+M)
-    Wfp[N÷2+1:N÷2+size(V,1),M÷2+1:M÷2+size(V,2)] = (x->if x 1.0 else 0.0 end).((~).(mask))
+    Wfp=zeros(eltype(V), size(V,1)+kernel_n, size(V,2)+kernel_m)
+    Wfp[kernel_n÷2+1:kernel_n÷2+size(V,1),kernel_m÷2+1:kernel_m÷2+size(V,2)] = (x->if x 1.0 else 0.0 end).((~).(mask))
     
-    Vh=zeros(eltype(V), size(V,1)+N, size(V,2)+M)
-    Vh2=zeros(eltype(V), size(V,1)+N, size(V,2)+M)
-    n=collect(-N÷2:N÷2)
-    m=collect(-M÷2:M÷2)
+    Vh=zeros(eltype(V), size(V,1)+kernel_n, size(V,2)+kernel_m)
+    Vh2=zeros(eltype(V), size(V,1)+kernel_n, size(V,2)+kernel_m)
+    n=collect(-kernel_n÷2:kernel_n÷2)
+    m=collect(-kernel_m÷2:kernel_m÷2)
     #println(size(n))
 
     kernel_0=wd(n, 0, sigma_n=sigma_n, sigma_m=sigma_m)
     kernel_1=wd(0, m, sigma_n=sigma_n, sigma_m=sigma_m)
     
-    Vh=_gaussian_filter(Vp, size(V, 1), size(V, 2), Wfp, mask, Vh, Vh2, kernel_0, kernel_1, M, N)
+    Vh=_gaussian_filter(Vp, size(V, 1), size(V, 2), Wfp, mask, Vh, Vh2, kernel_0, kernel_1, kernel_m, kernel_n)
     
-    Vh=Vh[N÷2+1:N÷2+size(V,1),M÷2+1:M÷2+size(V,2)]
+    Vh=Vh[kernel_n÷2+1:kernel_n÷2+size(V,1),kernel_m÷2+1:kernel_m÷2+size(V,2)]
     Vh[mask]=V[mask]
     Vh    
 end
@@ -134,8 +134,8 @@ function _sumthreshold(data, mask::BitArray{2}, i::Integer, chi)::BitArray{2}
     tmp_mask
 end
 
-function _run_sumthreshold(data, init_mask, eta, M, chi_i)
-    smoothed_data=gaussian_filter(data, init_mask;M=40, N=20, sigma_m=7.5, sigma_n=15)
+function _run_sumthreshold(data, init_mask, eta, M, chi_i; kernel_m=40,kernel_n=20, sigma_m=7.5, sigma_n=15.0)
+    smoothed_data=gaussian_filter(data, init_mask;kernel_m=kernel_m, kernel_n=kernel_n, sigma_m=sigma_m, sigma_n=sigma_n)
     res=data-smoothed_data
 
     st_mask=copy(init_mask)
@@ -162,7 +162,7 @@ function _run_sumthreshold(data, init_mask, eta, M, chi_i)
     st_mask
 end
 
-function get_rfi_mask(data; mask::Union{Missing, BitArray{2}}=missing, kernel_m=3, kernel_n=3, chi_1=35000.0, eta_i=[0.5, 0.55, 0.62, 0.75, 1], 
+function get_rfi_mask(data; mask::Union{Missing, BitArray{2}}=missing,kernel_m=40, kernel_n=20, sigma_m=7.5, sigma_n=15, di_args=(3,7), chi_1=35000.0, eta_i=[0.5, 0.55, 0.62, 0.75, 1], 
     normalize_standing_waves=true, suppress_dilation=false)
     T=eltype(data)
 
@@ -179,7 +179,7 @@ function get_rfi_mask(data; mask::Union{Missing, BitArray{2}}=missing, kernel_m=
     chi_i = chi_1 ./ p .^ log2.(m)
     st_mask=copy(mask)
     for (i,eta) in enumerate(eta_i)
-        st_mask=_run_sumthreshold(data, st_mask, eta, M , chi_i)
+        st_mask=_run_sumthreshold(data, st_mask, eta, M , chi_i; kernel_m=kernel_m,kernel_n=kernel_n, sigma_m=sigma_m, sigma_n=sigma_n)
         #write_fits(Int, st_mask, "final_"*string(eta)*".fits")
     end
 
@@ -187,7 +187,7 @@ function get_rfi_mask(data; mask::Union{Missing, BitArray{2}}=missing, kernel_m=
         st_mask
     else
         dilated_mask=st_mask
-        dilated_mask = binary_mask_dilation(dilated_mask .⊻ mask, kernel_m, kernel_n)
+        dilated_mask = binary_mask_dilation(dilated_mask .⊻ mask, di_args...)
 
         dilated_mask .| st_mask
     end
