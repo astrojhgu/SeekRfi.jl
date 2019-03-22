@@ -3,13 +3,13 @@ module SeekRfi
 import Statistics
 import Images
 
-import FITSIO
+#import FITSIO
 
-function write_fits(T::DataType, v, name::String)
-    f=FITSIO.FITS(name, "w")
-    write(f, convert(Array{T},transpose(v)))
-    close(f)
-end
+#function write_fits(T::DataType, v, name::String)
+#    f=FITSIO.FITS(name, "w")
+#    write(f, convert(Array{T},transpose(v)))
+#    close(f)
+#end
 
 
 function gaussian_filter(V, mask; kernel_m=40, kernel_n=20, sigma_m=7.5, sigma_n=15)
