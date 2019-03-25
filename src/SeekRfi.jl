@@ -17,10 +17,10 @@ function gaussian_filter(V, mask; kernel_m=40, kernel_n=20, sigma_m=7.5, sigma_n
 
     Vp=zeros(eltype(V), size(V,1)+kernel_n, size(V,2)+kernel_m)
     Vp[kernel_n÷2+1:kernel_n÷2+size(V,1),kernel_m÷2+1:kernel_m÷2+size(V,2)] = V[:,:]
-    
+
     Wfp=zeros(eltype(V), size(V,1)+kernel_n, size(V,2)+kernel_m)
     Wfp[kernel_n÷2+1:kernel_n÷2+size(V,1),kernel_m÷2+1:kernel_m÷2+size(V,2)] = (x->if x 1.0 else 0.0 end).((~).(mask))
-    
+
     Vh=zeros(eltype(V), size(V,1)+kernel_n, size(V,2)+kernel_m)
     Vh2=zeros(eltype(V), size(V,1)+kernel_n, size(V,2)+kernel_m)
     n=collect(-kernel_n÷2:kernel_n÷2)
@@ -29,12 +29,12 @@ function gaussian_filter(V, mask; kernel_m=40, kernel_n=20, sigma_m=7.5, sigma_n
 
     kernel_0=wd(n, 0, sigma_n=sigma_n, sigma_m=sigma_m)
     kernel_1=wd(0, m, sigma_n=sigma_n, sigma_m=sigma_m)
-    
+
     Vh=_gaussian_filter(Vp, size(V, 1), size(V, 2), Wfp, mask, Vh, Vh2, kernel_0, kernel_1, kernel_m, kernel_n)
-    
+
     Vh=Vh[kernel_n÷2+1:kernel_n÷2+size(V,1),kernel_m÷2+1:kernel_m÷2+size(V,2)]
     Vh[mask]=V[mask]
-    Vh    
+    Vh
 end
 
 
@@ -48,7 +48,7 @@ function _gaussian_filter(Vp, vs0, vs1, Wfp, mask, Vh, Vh2, kernel_0, kernel_1, 
             else
                 val=sum(Wfp[i-n2:i+n2, j].*Vp[i-n2:i+n2, j].*kernel_0)
                 #print(sum(Vp[i-n2+1:i+n2, j])," ")
-                
+
                 Vh[i,j]=val/sum(Wfp[i-n2:i+n2, j].*kernel_0)
                 #print(Vh[i,j]," ")
             end
@@ -105,26 +105,26 @@ function _sumthreshold(data, mask::BitArray{2}, i::Integer, chi)::BitArray{2}
     for x in 0:ds0-1
         sum = zero(T)
         cnt = 0
-        
+
         for ii in 0:i-1
             if mask[x+1, ii+1] != true
                 sum += data[x+1, ii+1]
                 cnt += 1
             end
         end
-        
+
         for y in i:ds1-1
             if sum > chi * cnt
                 for ii2 in 0:i-1
                     tmp_mask[x+1, y-ii2] = true
                 end
             end
-                    
+
             if mask[x+1, y+1] != true
                 sum += data[x+1, y+1]
                 cnt += 1
             end
-            
+
             if mask[x+1, y-i+1] != true
                 sum -= data[x+1, y-i+1]
                 cnt -= 1
@@ -151,18 +151,18 @@ function _run_sumthreshold(data, init_mask, eta, M, chi_i; kernel_m=40,kernel_n=
             #println(size(res))
             #println(size(st_mask))
             st_mask = _sumthreshold(res, st_mask, m, chi)
-            st_mask = convert(BitArray, 
-            transpose(_sumthreshold(convert(Array, transpose(res)), convert(BitArray, transpose(st_mask)), m, 
+            st_mask = convert(BitArray,
+            transpose(_sumthreshold(convert(Array, transpose(res)), convert(BitArray, transpose(st_mask)), m,
             chi))
             )
-            write_fits(Int, st_mask, "mask_"*string(m)*".fits")
+            #write_fits(Int, st_mask, "mask_"*string(m)*".fits")
         end
     end
-    write_fits(Int, st_mask, "final_"*string(eta)*".fits")
+    #write_fits(Int, st_mask, "final_"*string(eta)*".fits")
     st_mask
 end
 
-function get_rfi_mask(data; mask::Union{Missing, BitArray{2}}=missing,kernel_m=40, kernel_n=20, sigma_m=7.5, sigma_n=15, di_args=(3,7), chi_1=35000.0, eta_i=[0.5, 0.55, 0.62, 0.75, 1], 
+function get_rfi_mask(data; mask::Union{Missing, BitArray{2}}=missing,kernel_m=40, kernel_n=20, sigma_m=7.5, sigma_n=15, di_args=(3,7), chi_1=35000.0, eta_i=[0.5, 0.55, 0.62, 0.75, 1],
     normalize_standing_waves=true, suppress_dilation=false)
     T=eltype(data)
 
